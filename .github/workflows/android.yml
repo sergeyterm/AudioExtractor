@@ -1,0 +1,99 @@
+name: Build Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android API 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -n 1)
+          fi
+          test -x "$SDKMANAGER"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Test core rules
+        run: bash tests/run-rules.sh
+      - name: Compile, unit tests and lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          repos=(
+            'https://maven-central.storage-download.googleapis.com/maven2/'
+            'https://repo1.maven.org/maven2/'
+            'https://repo.maven.apache.org/maven2/'
+          )
+          for i in "${!repos[@]}"; do
+            repo="${repos[$i]}"
+            echo "Attempt $((i + 1)): $repo"
+            if gradle --no-daemon --max-workers=2 --stacktrace -PcentralRepo="$repo" :app:testDebugUnitTest :app:lintDebug :app:assembleDebug 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"; then
+              exit 0
+            fi
+            for report in app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt app/build/reports/lint-results-debug.txt; do
+              if [[ -f "$report" ]]; then cat "$report"; fi
+            done
+            if ! grep -Eqi 'status code (429|500|502|503|504)|HTTP (429|500|502|503|504)|Read timed out|Connection timed out|Connection reset|UnknownHostException|Temporary failure in name resolution|Could not resolve all (files|artifacts|dependencies)' "$RUNNER_TEMP/gradle-build.log"; then
+              echo "Build failed for a non-network reason; inspect the log."
+              exit 1
+            fi
+            if [[ "$i" -lt $(("${#repos[@]}" - 1)) ]]; then
+              sleep $((45 * (i + 1)))
+            fi
+          done
+          exit 1
+      - name: Verify APK signature and ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/AudioExtractor-1.0.1-arm64.apk
+          BT="$ANDROID_HOME/build-tools/36.0.0"
+          "$BT/apksigner" verify --verbose --print-certs dist/*.apk | tee dist/signature.txt
+          "$BT/aapt" dump badging dist/*.apk | tee dist/apk-info.txt
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          with zipfile.ZipFile(next(Path('dist').glob('*.apk'))) as z:
+              libs=[n for n in z.namelist() if n.startswith('lib/') and n.endswith('.so')]
+              assert libs, 'No native libraries packaged'
+              assert {n.split('/')[1] for n in libs} == {'arm64-v8a'}, libs
+              assert any('ffmpeg' in n.lower() for n in libs), 'FFmpeg not packaged'
+              assert z.testzip() is None, 'Damaged APK archive'
+              print('Verified ARM64-only APK, including FFmpeg:', len(libs), 'native files')
+          PY
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt)
+          cp LICENSE THIRD_PARTY_NOTICES.md dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AudioExtractor-1.0.1-ARM64
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore

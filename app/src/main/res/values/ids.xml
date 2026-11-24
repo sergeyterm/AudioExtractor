@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="video_url" type="id"/>
+    <item name="bitrate_group" type="id"/>
+    <item name="download_rights" type="id"/>
+    <item name="rate_128" type="id"/>
+    <item name="rate_192" type="id"/>
+    <item name="rate_256" type="id"/>
+    <item name="rate_320" type="id"/>
+</resources>
