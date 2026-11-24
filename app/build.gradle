@@ -1,0 +1,43 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.audioextractor.app'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'com.audioextractor.app'
+        minSdk 29
+        targetSdk 36
+        versionCode 1
+        versionName '1.0.0'
+        ndk { abiFilters 'arm64-v8a' }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    packaging {
+        jniLibs { useLegacyPackaging = true }
+        resources { excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE*', 'META-INF/NOTICE*'] }
+    }
+    signingConfigs {
+        if (System.getenv('AE_KEYSTORE')) {
+            release {
+                storeFile file(System.getenv('AE_KEYSTORE'))
+                storePassword System.getenv('AE_STORE_PASSWORD')
+                keyAlias System.getenv('AE_KEY_ALIAS')
+                keyPassword System.getenv('AE_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (System.getenv('AE_KEYSTORE')) signingConfig signingConfigs.release
+        }
+    }
+}
+dependencies {
+    implementation 'io.github.junkfood02.youtubedl-android:library:0.18.1'
+    implementation 'io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1'
+    testImplementation 'junit:junit:4.13.2'
+}
