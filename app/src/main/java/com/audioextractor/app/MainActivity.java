@@ -21,7 +21,7 @@ public final class MainActivity extends Activity {
     private static final int[] RATE_IDS = {R.id.rate_128, R.id.rate_192, R.id.rate_256, R.id.rate_320};
     private final Handler ui = new Handler(Looper.getMainLooper());
     private EditText url;
-    private Button paste, start, cancel, open, share;
+    private Button paste, start, cancel, open, share, copyDiagnostic;
     private TextView status, result, progressLabel;
     private RadioGroup rates;
     private CheckBox rights;
@@ -111,6 +111,20 @@ public final class MainActivity extends Activity {
         progress.setProgressBackgroundTintList(ColorStateList.valueOf(SOFT)); progress.setVisibility(View.GONE);
         LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1,dp(10)); pp.topMargin = dp(12); processing.addView(progress,pp);
         progressLabel = label("",12,MUTED,false); add(processing,progressLabel,7);
+        copyDiagnostic = button("Скопировать диагностику",false); add(processing,copyDiagnostic,8);
+        copyDiagnostic.setVisibility(View.GONE);
+        copyDiagnostic.setOnClickListener(v -> {
+            String details = ExtractService.diagnostic;
+            if (details.isEmpty()) return;
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("Диагностика ошибки")
+                .setMessage(details)
+                .setNegativeButton("Закрыть", null)
+                .setPositiveButton("Копировать", (d, which) -> {
+                    getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Audio Extractor",details));
+                    toast("Диагностика скопирована");
+                }).show();
+        });
 
         resultCard = card(); add(root, resultCard, 14); resultCard.setVisibility(View.GONE);
         add(resultCard,label("Последний сохранённый MP3",17,INK,true),0);
@@ -118,7 +132,7 @@ public final class MainActivity extends Activity {
         open = button("Открыть аудио",true); add(resultCard,open,13); open.setOnClickListener(v -> openResult(false));
         share = button("Поделиться файлом",false); add(resultCard,share,8); share.setOnClickListener(v -> openResult(true));
         add(root,label("Папка: внутренняя память → Music → AudioExtractor\nОбработка на устройстве • Без передачи ссылки на сервер сборки",12,MUTED,false),18);
-        add(root,label("Audio Extractor  1.0.0  /  ARM64",12,MUTED,false),12);
+        add(root,label("Audio Extractor  1.0.1  /  ARM64",12,MUTED,false),12);
         if (saved == null) handleShare(getIntent());
         if (saved != null) { url.setText(saved.getString("url", "")); rates.check(saved.getInt("quality",R.id.rate_256)); rights.setChecked(saved.getBoolean("rights")); }
         refresh();
@@ -164,7 +178,8 @@ public final class MainActivity extends Activity {
     private void refresh() {
         ExtractService.State s = ExtractService.state;
         if (s != lastState) {
-            lastState = s; status.setText(s.text()); progress.setVisibility(s.busy() || s.progress()==100 ? View.VISIBLE:View.GONE);
+            lastState = s; status.setText(s.text());
+            copyDiagnostic.setVisibility(!s.busy() && !ExtractService.diagnostic.isEmpty() ? View.VISIBLE : View.GONE); progress.setVisibility(s.busy() || s.progress()==100 ? View.VISIBLE:View.GONE);
             progress.setIndeterminate(s.busy() && s.progress()<0); if (s.progress()>=0) progress.setProgress(s.progress());
             progressLabel.setText(s.busy() ? "Можно свернуть приложение или выключить экран." : s.progress()==100 ? "Файл готов к воспроизведению." : "");
             SharedPreferences prefs = getSharedPreferences(ExtractService.PREFS, MODE_PRIVATE);

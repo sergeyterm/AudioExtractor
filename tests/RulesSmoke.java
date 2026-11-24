@@ -19,6 +19,21 @@ public class RulesSmoke {
         check(AudioRules.duration(3661000).equals("1:01:01"));
         for(int k:new int[]{128,192,256,320}) check(AudioRules.validateBitrate(k)==k);
         bad(() -> AudioRules.validateBitrate(400));
+        check(AudioRules.errorCode("HTTP Error 403: Forbidden").equals("HTTP_403"));
+        check(AudioRules.errorCode("HTTP Error 429: Too Many Requests").equals("HTTP_429"));
+        check(AudioRules.errorCode("Video id 403abc, fragment unavailable").equals("FRAGMENT"));
+        check(AudioRules.errorCode("ERROR: Sign in to confirm you are not a bot").equals("AUTH_REQUIRED"));
+        check(AudioRules.errorCode("Connection reset by peer").equals("NETWORK"));
+        check(AudioRules.errorCode("ERROR: ffmpeg postprocessing failed").equals("CONVERSION"));
+        check(AudioRules.errorCode("ERROR: [download] fragment unavailable").equals("FRAGMENT"));
+        check(AudioRules.errorCode("ERROR: Requested format is not available").equals("FORMAT"));
+        check(AudioRules.errorCode("private video").equals("RESTRICTED"));
+        check(AudioRules.errorCode("No space left on device").equals("STORAGE"));
+        check(AudioRules.errorCode("unknown error 4290").equals("OTHER"));
+        String diagnostic = AudioRules.sanitizeDiagnostic("https://example.org/a?token=hidden\nAuthorization: Bearer secret\npassword=private");
+        check(!diagnostic.contains("hidden") && !diagnostic.contains("secret") && !diagnostic.contains("private"));
+        check(AudioRules.fullDuration(17999990,18000));
+        check(!AudioRules.fullDuration(14400000,18000));
         System.out.println("PASS: " + count + " checks");
     }
 }

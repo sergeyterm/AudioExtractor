@@ -13,8 +13,11 @@ Java 17, Android SDK 36, Gradle 8.13. Run:
     bash tests/run-rules.sh
     gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 
-GitHub Actions builds a signed debug APK and reports. Download the AudioExtractor-1.0.0-ARM64 artifact from a successful run. Debug signing is temporary unless a persistent release keystore is configured; Android may require uninstalling before replacing a differently signed build.
+GitHub Actions builds a signed debug APK and reports. Download the AudioExtractor-1.0.1-ARM64 artifact from a successful run. Debug signing is temporary unless a persistent release keystore is configured; Android may require uninstalling before replacing a differently signed build.
 
 No personal diagnostic reports, device identifiers or media links are included.
 
 GPL-3.0-or-later; see LICENSE and THIRD_PARTY_NOTICES.md. Verify and provide corresponding sources and notices for bundled dependencies before redistributing APKs.
+
+## 1.0.1 diagnostic update
+Separates HTTP 403, HTTP 429, authorization, network, fragment, format and conversion errors; adds local copyable redacted diagnostics and a 90-second network socket timeout. No change to source access restrictions. Long-duration logic tests do not demonstrate live stream availability.

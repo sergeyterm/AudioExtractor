@@ -28,6 +28,7 @@ public final class ExtractService extends Service {
     public record State(boolean busy, int progress, String text, String uri, String name, long duration, long bytes) {}
     static volatile State state = new State(false, -1, "Вставьте ссылку, чтобы начать.", "", "", 0, 0);
     static volatile boolean requested;
+    static volatile String diagnostic = "";
     private final Handler main = new Handler(Looper.getMainLooper());
     private volatile boolean cancelled;
     private volatile boolean timedOut;
@@ -53,6 +54,7 @@ public final class ExtractService extends Service {
         if (!START.equals(intent.getAction())) { requested = false; stopSelf(); return START_NOT_STICKY; }
         if (worker != null && !done) { requested = false; return START_NOT_STICKY; }
         done = false; cancelled = false; timedOut = false; lastNotification = 0;
+        diagnostic = "";
         String url = intent.getStringExtra("url"); int bitrate = intent.getIntExtra("bitrate", 256);
         processId = UUID.randomUUID().toString();
         state = new State(true, -1, "Подготовка аудиодвижка…", "", "", 0, 0);
@@ -146,7 +148,7 @@ public final class ExtractService extends Service {
             r.addOption("--abort-on-unavailable-fragments");
             r.addOption("--retries", "4");
             r.addOption("--fragment-retries", "10");
-            r.addOption("--socket-timeout", "30");
+            r.addOption("--socket-timeout", "90");
             r.addOption("--newline");
             r.addOption("--no-colors");
             checkCancelled();
@@ -196,7 +198,15 @@ public final class ExtractService extends Service {
         } catch (CancellationException e) {
             result = new State(false, -1, timedOut ? "Остановлено: лимит фоновой работы Android." : "Обработка отменена.", "", "", 0, 0);
         } catch (Exception | LinkageError e) {
-            result = new State(false, -1, cancelled ? (timedOut ? "Остановлено: лимит фоновой работы Android." : "Обработка отменена.") : humanError(e), "", "", 0, 0);
+            String details = exceptionDetails(e);
+            String code = AudioRules.errorCode(details);
+            if (!cancelled) {
+                diagnostic = "Audio Extractor 1.0.1 / " + code
+                    + "\nЭтап: " + state.text()
+                    + "\nAndroid API: " + Build.VERSION.SDK_INT
+                    + "\n" + AudioRules.sanitizeDiagnostic(details);
+            }
+            result = new State(false, -1, cancelled ? (timedOut ? "Остановлено: лимит фоновой работы Android." : "Обработка отменена.") : AudioRules.errorText(code), "", "", 0, 0);
         } finally {
             if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
             wakeLock = null;
@@ -243,17 +253,15 @@ public final class ExtractService extends Service {
         File[] children = f.listFiles(); if (children != null) for (File c : children) deleteTree(c);
         f.delete();
     }
-    private static String humanError(Throwable e) {
-        String message = e.getMessage();
-        if (message == null) message = e.getClass().getSimpleName();
-        String lower = message.toLowerCase(Locale.ROOT);
-        if (lower.contains("403") || lower.contains("sign in") || lower.contains("bot") || lower.contains("login") || lower.contains("429")) return "Источник отказал в доступе. Попробуйте другой разрешённый источник или обновлённую сборку приложения.";
-        if (lower.contains("no space") || lower.contains("enospc")) return "Недостаточно свободного места. Освободите память и повторите.";
-        if (lower.contains("timed out") || lower.contains("unable to download") || lower.contains("network") || lower.contains("resolve host")) return "Ошибка сети или источника. Проверьте соединение и повторите.";
-        if (lower.contains("drm") || lower.contains("private video")) return "Видео защищено или недоступно. Нужен разрешённый источник без DRM.";
-        String clean = message.replaceAll("https?://\\S+", "[ссылка]").replaceAll("(?s)\\s+", " ").trim();
-        if (clean.length() > 320) clean = clean.substring(0, 320) + "…";
-        return "Ошибка: " + clean;
+    private static String exceptionDetails(Throwable e) {
+        StringBuilder out = new StringBuilder();
+        Throwable cause = e;
+        for (int depth = 0; cause != null && depth < 6; depth++, cause = cause.getCause()) {
+            if (depth > 0) out.append("\nCause: ");
+            out.append(cause.getClass().getSimpleName()).append(": ");
+            if (cause.getMessage() != null) out.append(cause.getMessage());
+        }
+        return out.toString();
     }
     @Override public void onTimeout(int startId, int fgsType) {
         if (!done) cancel(true);
