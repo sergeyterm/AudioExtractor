@@ -18,6 +18,7 @@ import android.widget.*;
 public final class MainActivity extends Activity {
     private static final int INK = 0xff142b27, MUTED = 0xff526760, BG = 0xfff3f6f5, ACCENT = 0xff006b59, SOFT = 0xffdcefe8;
     private static final int[] RATES = {128, 192, 256, 320};
+    private static final int[] RATE_IDS = {R.id.rate_128, R.id.rate_192, R.id.rate_256, R.id.rate_320};
     private final Handler ui = new Handler(Looper.getMainLooper());
     private EditText url;
     private Button paste, start, cancel, open, share;
@@ -63,7 +64,7 @@ public final class MainActivity extends Activity {
         LinearLayout inputCard = card(); add(root, inputCard, 24);
         add(inputCard, label("01   Источник видео", 17, INK, true), 0);
         add(inputCard, label("Вставьте ссылку на доступное для скачивания видео.", 14, MUTED, false), 8);
-        url = new EditText(this); url.setId(1001); url.setTextSize(16); url.setTextColor(INK); url.setHintTextColor(MUTED);
+        url = new EditText(this); url.setId(R.id.video_url); url.setTextSize(16); url.setTextColor(INK); url.setHintTextColor(MUTED);
         url.setHint("https://…"); url.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         url.setMinLines(2); url.setMaxLines(4); url.setGravity(Gravity.TOP | Gravity.START); url.setPadding(dp(14),dp(13),dp(14),dp(13));
         url.setBackground(shape(BG, 13, 0xffcedbd5)); add(inputCard, url, 13);
@@ -82,16 +83,16 @@ public final class MainActivity extends Activity {
         LinearLayout quality = card(); add(root, quality, 14);
         add(quality, label("02   Качество MP3",17,INK,true), 0);
         add(quality, label("Битрейт выходного файла, кбит/с",14,MUTED,false),8);
-        rates = new RadioGroup(this); rates.setOrientation(RadioGroup.VERTICAL); rates.setId(1002);
+        rates = new RadioGroup(this); rates.setOrientation(RadioGroup.VERTICAL); rates.setId(R.id.bitrate_group);
         String[] descriptions = {"128  ·  компактный файл", "192  ·  стандартное качество", "256  ·  высокое качество", "320  ·  максимальный битрейт MP3"};
         for (int i = 0; i < RATES.length; i++) {
-            RadioButton rb = new RadioButton(this); rb.setId(2000 + i); rb.setText(descriptions[i]); rb.setTextSize(15); rb.setTextColor(INK);
+            RadioButton rb = new RadioButton(this); rb.setId(RATE_IDS[i]); rb.setText(descriptions[i]); rb.setTextSize(15); rb.setTextColor(INK);
             rb.setButtonTintList(ColorStateList.valueOf(ACCENT)); rb.setMinHeight(dp(44)); rates.addView(rb, new RadioGroup.LayoutParams(-1,-2));
         }
-        rates.check(2002); add(quality, rates, 8);
+        rates.check(R.id.rate_256); add(quality, rates, 8);
         add(quality,label("Повышение битрейта не восстанавливает качество исходного аудио.",12,MUTED,false),5);
 
-        rights = new CheckBox(this); rights.setId(1003); rights.setText("У меня есть право скачать и сохранить аудио."); rights.setTextColor(INK); rights.setTextSize(14); rights.setButtonTintList(ColorStateList.valueOf(ACCENT)); rights.setMinHeight(dp(48));
+        rights = new CheckBox(this); rights.setId(R.id.download_rights); rights.setText("У меня есть право скачать и сохранить аудио."); rights.setTextColor(INK); rights.setTextSize(14); rights.setButtonTintList(ColorStateList.valueOf(ACCENT)); rights.setMinHeight(dp(48));
         add(root, rights, 13);
         rights.setOnCheckedChangeListener((b, checked) -> updateEnabled());
         start = button("Извлечь и сохранить MP3", true); add(root, start, 9); start.setOnClickListener(v -> begin());
@@ -119,7 +120,7 @@ public final class MainActivity extends Activity {
         add(root,label("Папка: внутренняя память → Music → AudioExtractor\nОбработка на устройстве • Без передачи ссылки на сервер сборки",12,MUTED,false),18);
         add(root,label("Audio Extractor  1.0.0  /  ARM64",12,MUTED,false),12);
         if (saved == null) handleShare(getIntent());
-        if (saved != null) { url.setText(saved.getString("url", "")); rates.check(saved.getInt("quality",2002)); rights.setChecked(saved.getBoolean("rights")); }
+        if (saved != null) { url.setText(saved.getString("url", "")); rates.check(saved.getInt("quality",R.id.rate_256)); rights.setChecked(saved.getBoolean("rights")); }
         refresh();
     }
     @Override protected void onSaveInstanceState(Bundle b) {
@@ -137,8 +138,11 @@ public final class MainActivity extends Activity {
         final String link;
         try { link = AudioRules.validateUrl(url.getText().toString()); }
         catch (RuntimeException e) { url.setError(e.getMessage()); return; }
-        int selected = rates.getCheckedRadioButtonId() - 2000;
-        int k = RATES[Math.max(0,Math.min(RATES.length - 1,selected))];
+        int selected = rates.getCheckedRadioButtonId();
+        int k = 256;
+        for (int i = 0; i < RATE_IDS.length; i++) {
+            if (RATE_IDS[i] == selected) { k = RATES[i]; break; }
+        }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
             && !getPreferences(MODE_PRIVATE).getBoolean("askedNotifications",false)) {
             getPreferences(MODE_PRIVATE).edit().putBoolean("askedNotifications",true).apply();

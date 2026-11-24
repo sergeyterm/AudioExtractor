@@ -49,6 +49,9 @@ jobs:
             if gradle --no-daemon --max-workers=2 --stacktrace -PcentralRepo="$repo" :app:testDebugUnitTest :app:lintDebug :app:assembleDebug 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"; then
               exit 0
             fi
+            for report in app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt app/build/reports/lint-results-debug.txt; do
+              if [[ -f "$report" ]]; then cat "$report"; fi
+            done
             if ! grep -Eqi 'status code (429|500|502|503|504)|HTTP (429|500|502|503|504)|Read timed out|Connection timed out|Connection reset|UnknownHostException|Temporary failure in name resolution|Could not resolve all (files|artifacts|dependencies)' "$RUNNER_TEMP/gradle-build.log"; then
               echo "Build failed for a non-network reason; inspect the log."
               exit 1
