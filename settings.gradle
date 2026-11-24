@@ -1,9 +1,19 @@
 pluginManagement {
-    repositories { google(); mavenCentral(); gradlePluginPortal() }
+    repositories {
+        google()
+        maven {
+            url = uri(providers.gradleProperty('centralRepo').getOrElse('https://repo.maven.apache.org/maven2/'))
+        }
+    }
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories { google(); mavenCentral() }
+    repositories {
+        google()
+        maven {
+            url = uri(providers.gradleProperty('centralRepo').getOrElse('https://repo.maven.apache.org/maven2/'))
+        }
+    }
 }
 rootProject.name = 'AudioExtractor'
 include ':app'

@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, android-v1]
+    branches: [main]
   pull_request:
 permissions:
   contents: read
@@ -35,7 +35,29 @@ jobs:
       - name: Test core rules
         run: bash tests/run-rules.sh
       - name: Compile, unit tests and lint
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+        shell: bash
+        run: |
+          set -euo pipefail
+          repos=(
+            'https://maven-central.storage-download.googleapis.com/maven2/'
+            'https://repo1.maven.org/maven2/'
+            'https://repo.maven.apache.org/maven2/'
+          )
+          for i in "${!repos[@]}"; do
+            repo="${repos[$i]}"
+            echo "Attempt $((i + 1)): $repo"
+            if gradle --no-daemon --max-workers=2 --stacktrace -PcentralRepo="$repo" :app:testDebugUnitTest :app:lintDebug :app:assembleDebug 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"; then
+              exit 0
+            fi
+            if ! grep -Eqi 'status code (429|500|502|503|504)|HTTP (429|500|502|503|504)|Read timed out|Connection timed out|Connection reset|UnknownHostException|Temporary failure in name resolution|Could not resolve all (files|artifacts|dependencies)' "$RUNNER_TEMP/gradle-build.log"; then
+              echo "Build failed for a non-network reason; inspect the log."
+              exit 1
+            fi
+            if [[ "$i" -lt $(("${#repos[@]}" - 1)) ]]; then
+              sleep $((45 * (i + 1)))
+            fi
+          done
+          exit 1
       - name: Verify APK signature and ABI
         shell: bash
         run: |
