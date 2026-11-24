@@ -184,8 +184,9 @@ public final class MainActivity extends Activity {
     private void openResult(boolean send) {
         if (resultUri.isEmpty()) return;
         Uri uri = Uri.parse(resultUri);
-        Intent i = send ? new Intent(Intent.ACTION_SEND).setType("audio/mpeg").putExtra(Intent.EXTRA_STREAM,uri).setClipData(ClipData.newRawUri("MP3",uri))
+        Intent i = send ? new Intent(Intent.ACTION_SEND).setType("audio/mpeg").putExtra(Intent.EXTRA_STREAM,uri)
             : new Intent(Intent.ACTION_VIEW).setDataAndType(uri,"audio/mpeg");
+        if (send) i.setClipData(ClipData.newRawUri("MP3",uri));
         i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try { startActivity(Intent.createChooser(i,send?"Поделиться MP3":"Открыть MP3")); }
         catch (RuntimeException e) { toast("Не удалось открыть файл. Проверьте папку Music/AudioExtractor."); }
