@@ -1,0 +1,67 @@
+name: Build Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, android-v1]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android API 36
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Test core rules
+        run: bash tests/run-rules.sh
+      - name: Compile, unit tests and lint
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Verify APK signature and ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/AudioExtractor-1.0.0-arm64.apk
+          BT="$ANDROID_HOME/build-tools/36.0.0"
+          "$BT/apksigner" verify --verbose --print-certs dist/*.apk | tee dist/signature.txt
+          "$BT/aapt" dump badging dist/*.apk | tee dist/apk-info.txt
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          with zipfile.ZipFile(next(Path('dist').glob('*.apk'))) as z:
+              libs=[n for n in z.namelist() if n.startswith('lib/') and n.endswith('.so')]
+              assert libs, 'No native libraries packaged'
+              assert {n.split('/')[1] for n in libs} == {'arm64-v8a'}, libs
+              assert any('ffmpeg' in n.lower() for n in libs), 'FFmpeg not packaged'
+              assert z.testzip() is None, 'Damaged APK archive'
+              print('Verified ARM64-only APK, including FFmpeg:', len(libs), 'native files')
+          PY
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt)
+          cp LICENSE THIRD_PARTY_NOTICES.md dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AudioExtractor-1.0.0-ARM64
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
